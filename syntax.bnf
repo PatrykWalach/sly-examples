@@ -1,0 +1,59 @@
+%lex
+
+%%
+\s+
+\d+     return 'NUMBER'
+[+\-]   return 'ADDITIVE_OPERATOR'
+[*\/]   return 'MULTIPLICATIVE_OPERATOR'
+/lex
+
+%left '+'
+%left '*'
+
+%%
+
+Expression
+ : AdditiveExpression
+ ;
+
+AdditiveExpression
+  : AdditiveExpression ADDITIVE_OPERATOR MultiplicativeExpression
+        { 
+            $$ = {
+                type: 'BinaryExpression',
+                op: $2,
+                left: $1,
+                right: $3
+            }
+        }
+  | MultiplicativeExpression
+  ;
+MultiplicativeExpression
+  : MultiplicativeExpression MULTIPLICATIVE_OPERATOR PrimaryExpression
+        { 
+            $$ = {
+                type: 'BinaryExpression',
+                op: $2,
+                left: $1,
+                right: $3
+            }
+        }
+  | PrimaryExpression
+  ;
+
+PrimaryExpression
+  : Literal
+  | ParenthesizedExpression
+  ;
+
+Literal
+  : NumericLiteral
+  ;
+
+NumericLiteral
+  : NUMBER { $$ = Number($1) }
+  ;
+
+ParenthesizedExpression
+  : '(' AdditiveExpression ')' { $$ = $2 }
+  ;
