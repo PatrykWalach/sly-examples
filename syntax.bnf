@@ -1,10 +1,14 @@
 %lex
 
 %%
-\s+
-\d+     return 'NUMBER'
-[+\-]   return 'ADDITIVE_OPERATOR'
-[*\/]   return 'MULTIPLICATIVE_OPERATOR'
+
+\s+    /* skip whitespace */
+\d+    return 'NUMBER'
+
+
+[+\-]  return 'ADDITIVE_OPERATOR'
+[*/]   return 'MULTIPLICATIVE_OPERATOR'
+
 /lex
 
 %left '+'
