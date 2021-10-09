@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "syntax-cli:table":"syntax-cli --grammar syntax.bnf --mode LALR1 --table",
-    "syntax-cli:validate":"syntax-cli --grammar syntax.bnf --mode LALR1 --validate"
+    "syntax-cli:table": "syntax-cli --grammar syntax.bnf --mode LALR1 --table",
+    "syntax-cli:validate": "syntax-cli --grammar syntax.bnf --mode LALR1 --validate"
   },
   "keywords": [],
   "author": "",
