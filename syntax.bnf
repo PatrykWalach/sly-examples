@@ -55,7 +55,7 @@ Literal
   ;
 
 NumericLiteral
-  : NUMBER { $$ = Number($1) }
+  : NUMBER { $$ = { type: 'Literal', raw: $1, value: Number($1) } }
   ;
 
 ParenthesizedExpression
