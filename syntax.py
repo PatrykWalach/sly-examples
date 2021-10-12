@@ -4,7 +4,7 @@ from sly import Lexer, Parser
 class BaseLexer(Lexer):
     tokens = {NUMBER, ADDITIVE_OPERATOR,
               MULTIPLICATIVE_OPERATOR}
-    ignore = r'\s+'
+    ignore = r' \t'
 
     literals = { '(', ')' }
 
