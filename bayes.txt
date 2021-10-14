@@ -1,0 +1,19 @@
+Nodes:
+G,D,MA,GR,H
+Conditional Dependencies:
+(G,MA),(D,MA),(G,GR),(D,GR),(MA,H),(GR,H)
+Probabilities:
+P(G)=0.3
+P(D)=0.2
+P(MA|G,D) = 0.03
+P(MA|~G,D) = 0.02
+P(MA|G,~D) = 0.01
+P(MA|~G,~D) = 0.001
+P(GR|G,D) = 0.08
+P(GR|~G,D) = 0.05
+P(GR|G,~D) = 0.04
+P(GR|~G,~D) = 0.1
+P(H|MA,GR) = 0.95
+P(H|~MA,GR) = 0.2
+P(H|MA,~GR) = 0.7
+P(H|~MA,~GR) = 0.1
