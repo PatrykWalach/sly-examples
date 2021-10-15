@@ -102,9 +102,9 @@ class BayesLexer(Lexer):
     NODE['P'] = P
 
     @_(r'\d+\.\d+')
-    def NUMBER(self, p):
-        p.value = float(p.value)
-        return p
+    def NUMBER(self, t):
+        t.value = float(t.value)
+        return t
 
     @_(r'\n+')
     def ignore_newline(self, t):
