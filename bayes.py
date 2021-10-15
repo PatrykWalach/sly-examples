@@ -33,11 +33,11 @@ class BayesianNetwork:
     def query(self, query: Query):
         p = self.predict(query_to_event(query))
 
-        match query.conditional:
-            case Conditional(None):
+        match query:
+            case Query(Conditional(_, right)):
+                return p/self.predict(query_to_event(Query(right)))
+            case Query([*_]):
                 return p
-            case Conditional(_, right):
-                return p/self.predict(query_to_event(Query(Conditional(None, right))))
 
     def verify(self):
         for v in self.vertices:
@@ -135,6 +135,10 @@ class BayesParser(Parser):
     def query(self, p):
         return Query(p.conditional)
 
+    @_('"P" "(" negated_nodes ")" "="')
+    def query(self, p):
+        return Query(p.negated_nodes)
+
     @_('nodes')
     def nodes_declaration(self, p):
         self.ctx.nodes = [node.value for node in p.nodes]
@@ -207,10 +211,6 @@ class BayesParser(Parser):
     def conditional(self, p):
         return Conditional(p.negated_node, p.negated_nodes)
 
-    @_('negated_nodes')
-    def conditional(self, p):
-        return Conditional(None, p.negated_nodes)
-
     @_('negated_node "," negated_nodes')
     def negated_nodes(self, p):
         if p.negated_node in p.negated_nodes:
@@ -273,13 +273,13 @@ class NegatedNode(AstNode):
 
 @dataclass
 class Conditional(AstNode):
-    negated_node: NegatedNode | Node | None
+    negated_node: NegatedNode | Node
     negated_nodes: list[NegatedNode | Node]
 
     def accept(self, visitor: Visitor):
         for v in self.negated_nodes:
             v.accept(visitor)
-        if self.negated_node != None:
+
             self.negated_node.accept(visitor)
 
         visitor.visitConditional(self)
@@ -287,10 +287,16 @@ class Conditional(AstNode):
 
 @dataclass
 class Query(AstNode):
-    conditional: Conditional
+    value: Conditional | list[NegatedNode | Node]
 
     def accept(self, visitor: Visitor):
-        self.conditional.accept(visitor)
+        match self.value:
+            case [*arr]:
+                for v in arr:
+                    v.accept(visitor)
+            case v:
+                v.accept(visitor)
+
         visitor.visitQuery(self)
 
 
