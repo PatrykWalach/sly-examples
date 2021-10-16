@@ -280,7 +280,7 @@ class Conditional(AstNode):
         for v in self.negated_nodes:
             v.accept(visitor)
 
-            self.negated_node.accept(visitor)
+        self.negated_node.accept(visitor)
 
         visitor.visitConditional(self)
 
