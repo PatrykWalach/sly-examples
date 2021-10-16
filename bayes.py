@@ -79,10 +79,7 @@ class BayesianNetwork:
         return reduce(operator.mul, probabilities, 1)
 
 
-class BayesContext:
-    def __init__(self) -> None:
-        self.nodes: list[str] = []
-        self.verticies: list[tuple[str, str]] = []
+
 
 
 class BayesLexer(Lexer):
@@ -116,7 +113,6 @@ class BayesParser(Parser):
     debugfile = 'parser.out'
 
     def __init__(self) -> None:
-        self.ctx = BayesContext()
         super().__init__()
 
     @_('query')
@@ -141,7 +137,6 @@ class BayesParser(Parser):
 
     @_('nodes')
     def nodes_declaration(self, p):
-        self.ctx.nodes = [node.value for node in p.nodes]
         return p.nodes
 
     @_('node "," nodes')
@@ -170,7 +165,6 @@ class BayesParser(Parser):
 
     @_('"(" node "," node ")"')
     def conditional_dependency(self, p):
-        self.ctx.verticies.append((p.node0.value, p.node1.value))
         return (p.node0, p.node1)
 
     @_('probability probabilities')
@@ -191,20 +185,6 @@ class BayesParser(Parser):
 
     @_('node "|" negated_nodes')
     def probability_conditional(self, p):
-        node_parents = parents(self.ctx.verticies, p.node.value)
-        negated_nodes = {node.value: node for node in p.negated_nodes}
-
-        for (node_name, node) in negated_nodes.items():
-            if node_name not in node_parents:
-                print(
-                    f'warning: "{p.node}" does not depend on "{node_name}"')
-                p.negated_nodes.remove(node)
-
-        for missing_parent in set(node_parents).difference(set(negated_nodes.keys())):
-            raise ValueError(
-                f'Incorrect probability: {p.node}" also depends on "{missing_parent}"'
-            )
-
         return Conditional(p.node, p.negated_nodes)
 
     @_('negated_node "|" negated_nodes')
@@ -213,10 +193,6 @@ class BayesParser(Parser):
 
     @_('negated_node "," negated_nodes')
     def negated_nodes(self, p):
-        if p.negated_node in p.negated_nodes:
-            print(f'warning: Multiple nodes: "{p.negated_node}"')
-            return p.negated_nodes
-
         return [p.negated_node, *p.negated_nodes]
 
     @_('negated_node')
@@ -225,11 +201,7 @@ class BayesParser(Parser):
 
     @_('"~" negated_node')
     def negated_node(self, p):
-        match p.negated_node:
-            case NegatedNode(value):
-                return Node(value)
-            case Node(value):
-                return NegatedNode(value)
+        return Negation(p.negated_node)
 
     @_('node')
     def negated_node(self, p):
@@ -264,11 +236,11 @@ class Node(AstNode):
 
 
 @dataclass
-class NegatedNode(AstNode):
-    value: str
+class Negation(AstNode):
+    value: Node | Negation
 
     def accept(self, visitor: Visitor):
-        visitor.visitNegatedNode(self)
+        visitor.visitNegation(self)
 
 
 @dataclass
@@ -331,7 +303,7 @@ class Visitor(ABC):
     def visitNode(self, node: Node) -> None:
         pass
 
-    def visitNegatedNode(self, node: NegatedNode) -> None:
+    def visitNegation(self, node: Negation) -> None:
         pass
 
     def visitConditional(self, node: Conditional) -> None:
@@ -355,7 +327,7 @@ class QueryToEventVisitor(Visitor):
     def visitNode(self, node: Node):
         self.event[node.value] = True
 
-    def visitNegatedNode(self, node: NegatedNode):
+    def visitNegation(self, node: Negation):
         self.event[node.value] = False
 
 
@@ -402,7 +374,7 @@ def main():
 def apply_probability(n: BayesianNetwork, probability: Probability):
 
     match probability.of:
-        case Conditional(NegatedNode(value) | Node(value)):
+        case Conditional(Negation(value) | Node(value)):
             vertex = value
         case _:
             raise ValueError(f'Invalid conditional probability: {probability}')
