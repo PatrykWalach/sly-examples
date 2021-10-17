@@ -1,24 +1,27 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-import functools as ft
 import functools
-import itertools
-from sly import Lexer, Parser
-import random
-import re
-from itertools import product
-from functools import partial, reduce
+import json
 import operator
+import random
+import dataclasses as dc
+from functools import partial, reduce, wraps
+from itertools import product
+from typing import Any, Callable, Generic, TypeAlias, TypeVar, Union
+from sly import Lexer, Parser
 
 
-def parents(edges: list[tuple[str, str]], vertex: str):
+def _(fn: str, *args: list[str]) -> Callable[[R], R]:
+    raise Exception
+
+
+def parents(edges: list[tuple[str, A]], vertex: A):
     return [a for a, d in edges if d == vertex]
 
 
 class BayesianNetwork:
-    def __init__(self, *edges_or_vertices):
-        self.edges = [e for e in edges_or_vertices if isinstance(e, tuple)]
+    def __init__(self, *edges_or_vertices: str | tuple[str, str]):
+        self.edges = [
+            e for e in edges_or_vertices if isinstance(e, tuple)]
 
         self.vertices = set(sum([[*e] if isinstance(e, tuple) else [e]
                                  for e in edges_or_vertices], []))
@@ -31,11 +34,11 @@ class BayesianNetwork:
         return parents(self.edges, vertex)
 
     def query(self, query: Query):
-        p = self.predict(query_to_event(query))
+        p = self.predict(query_to_event_external_visitor(query))
 
         match query:
             case Query(Conditional(_, right)):
-                return p/self.predict(query_to_event(Query(right)))
+                return p/self.predict(query_to_event_external_visitor(Query(right)))
             case Query([*_]):
                 return p
 
@@ -79,7 +82,11 @@ class BayesianNetwork:
         return reduce(operator.mul, probabilities, 1)
 
 
-
+class AstEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if dc.is_dataclass(obj):
+            return {"type": type(obj).__name__} | {field: getattr(obj, field) for field in obj.__dataclass_fields__}
+        return json.JSONEncoder.default(self, obj)
 
 
 class BayesLexer(Lexer):
@@ -165,7 +172,7 @@ class BayesParser(Parser):
 
     @_('"(" node "," node ")"')
     def conditional_dependency(self, p):
-        return (p.node0, p.node1)
+        return Dependency(p.node0, p.node1)
 
     @_('probability probabilities')
     def probabilities(self, p):
@@ -221,102 +228,155 @@ def parse_query(logic: str):
     return parser.parse(lexer.tokenize(logic))
 
 
-class AstNode(ABC):
-    @abstractmethod
-    def accept(self, visitor: Visitor):
-        return NotImplemented
+A = TypeVar('A')
+B = TypeVar('B')
+C = TypeVar('C')
+D = TypeVar('D')
+E = TypeVar('E')
+F = TypeVar('F')
+G = TypeVar('G')
+H = TypeVar('H')
+I = TypeVar('I')
+J = TypeVar('J')
+K = TypeVar('K')
+L = TypeVar('L')
+M = TypeVar('M')
+R = TypeVar('R')
 
 
-@dataclass
-class Node(AstNode):
+@dc.dataclass(frozen=True)
+class Node:
     value: str
 
-    def accept(self, visitor: Visitor):
-        visitor.visitNode(self)
+
+T1 = TypeVar('T1')
 
 
-@dataclass
-class Negation(AstNode):
-    value: Node | Negation
-
-    def accept(self, visitor: Visitor):
-        visitor.visitNegation(self)
+@dc.dataclass(frozen=True)
+class Negation(Generic[A]):
+    value: A
 
 
-@dataclass
-class Conditional(AstNode):
-    negated_node: NegatedNode | Node
-    negated_nodes: list[NegatedNode | Node]
-
-    def accept(self, visitor: Visitor):
-        for v in self.negated_nodes:
-            v.accept(visitor)
-
-        self.negated_node.accept(visitor)
-
-        visitor.visitConditional(self)
+@dc.dataclass(frozen=True)
+class Dependency(Generic[B]):
+    left: B
+    right: B
 
 
-@dataclass
-class Query(AstNode):
-    value: Conditional | list[NegatedNode | Node]
-
-    def accept(self, visitor: Visitor):
-        match self.value:
-            case [*arr]:
-                for v in arr:
-                    v.accept(visitor)
-            case v:
-                v.accept(visitor)
-
-        visitor.visitQuery(self)
+@dc.dataclass(frozen=True)
+class Conditional(Generic[D, E]):
+    left: D
+    right: list[E]
 
 
-@dataclass
-class Probability(AstNode):
-    of: Conditional
+@dc.dataclass(frozen=True)
+class Query(Generic[F, G]):
+    value: F | list[G]
+
+
+@dc.dataclass(frozen=True)
+class Probability(Generic[H]):
+    expression: H
     value: float
 
-    def accept(self, visitor: Visitor):
-        self.of.accept(visitor)
-        visitor.visitProbability(self)
+
+@dc.dataclass(frozen=True)
+class Declaration(Generic[J, K, L]):
+    nodes: list[J]
+    conditional_dependencies: list[K]
+    probabilities: list[L]
 
 
-@dataclass
-class Declaration(AstNode):
-    nodes: list[Node]
-    conditional_dependencies: list[tuple[Node, Node]]
-    probabilities: list[Probability]
+def internal(fn: Callable[[AstNode[R]], R]) -> Callable[[AstTree], R]:
 
-    def accept(self, visitor: Visitor):
-        for v in self.nodes:
-            v.accept(visitor)
-        for v in self.conditional_dependencies:
-            v.accept(visitor)
-        for v in self.probabilities:
-            v.accept(visitor)
+    @wraps(fn)
+    def visit(node: Any):
+        if dc.is_dataclass(node):
+            dataclass_values = (getattr(node, field)
+                                for field in node.__dataclass_fields__)
+            dataclass_values = [visit(value)
+                                for value in dataclass_values]
+            return fn(node.__class__(*dataclass_values))
+        match node:
+            case [*arr]:
+                return [visit(v) for v in arr]
+            case _:
+                return node
 
-        visitor.visitDeclaration(self)
+    return visit
 
 
-class Visitor(ABC):
-    def visitNode(self, node: Node) -> None:
-        pass
+Event: TypeAlias = dict[str, bool]
 
-    def visitNegation(self, node: Negation) -> None:
-        pass
 
-    def visitConditional(self, node: Conditional) -> None:
-        pass
+AstNode: TypeAlias = Declaration[R, R, R] | Conditional[R,
+                                                        R] | Node | Negation[R] | Query[R, R] | Dependency[R] | Probability[R]
 
-    def visitQuery(self, node: Query) -> None:
-        pass
 
-    def visitProbability(self, node: Probability) -> None:
-        pass
+AstNegation: TypeAlias = Negation[Union[Node, 'AstNegation']]
+AstConditional: TypeAlias = Conditional[Node | AstNegation, Node | AstNegation]
+AstQuery: TypeAlias = Query[AstConditional, Node | AstNegation]
+AstDependency: TypeAlias = Dependency[Node]
+AstProbability: TypeAlias = Probability[AstConditional]
+AstDeclaration: TypeAlias = Declaration[Node, AstDependency, AstProbability]
 
-    def visitDeclaration(self, node: Declaration) -> None:
-        pass
+AstTree: TypeAlias = AstNegation | AstConditional | AstDeclaration | AstQuery | AstDependency | Node | AstProbability
+
+
+@internal
+def query_to_event_visitor(query: AstNode[Event]) -> Event:
+    match query:
+        case Node(value):
+            return {value: True}
+        case Negation(node):
+            return {key: not value for key, value in node.items()}
+        case Conditional(left, list() as right):
+            return functools.reduce(operator.or_, [left, *right])
+        case Query([*arr]):
+            return functools.reduce(operator.or_, arr)
+        case Query(value) if not isinstance(value, list):
+            return value
+        case err:
+            raise TypeError(err)
+
+
+def query_to_event_external_visitor(query: AstTree) -> Event:
+    match query:
+        case Node(value):
+            return {value: True}
+        case Negation(node):
+            return {key: not value for key, value in query_to_event_external_visitor(node).items()}
+        case Conditional(left, list() as right):
+            left_and_right = map(
+                query_to_event_external_visitor, [left, *right])
+            return functools.reduce(operator.or_, left_and_right)
+        case Query([*arr]):
+            arr = map(query_to_event_external_visitor, arr)
+            return functools.reduce(operator.or_, arr)
+        case Query(value) if not isinstance(value, list):
+            return query_to_event_external_visitor(value)
+        case node:
+            raise TypeError(node)
+
+
+@internal
+def remove_negation_visitor(node):
+    match node:
+        case Negation(Negation(node)):
+            return node
+        case _:
+            return node
+
+
+@internal
+def get_node_visitor(any_node: AstNode[Node]) -> Node:
+    match any_node:
+        case Node():
+            return any_node
+        case Negation(node):
+            return node
+        case _:
+            raise TypeError(any_node)
 
 
 class QueryToEventVisitor(Visitor):
@@ -344,12 +404,25 @@ def main():
     lexer = BayesLexer()
     parser = BayesParser()
 
-    declaration: Declaration = parser.parse(lexer.tokenize(text))
+    any_declaration = parser.parse(lexer.tokenize(text))
+
+    match any_declaration:
+        case Declaration([*_], [*_], [*_]) as d:
+            declaration: AstDeclaration = d
+        case _:
+            raise ValueError
+
+    declaration = remove_negation_visitor(declaration)
+
+
+
+    with open('bayes-ast.json', 'w') as f:
+        json.dump(declaration, f, cls=AstEncoder, indent=4)
 
     edges = [node.value for node in declaration.nodes]
 
-    verticies = [(a.value, b.value)
-                 for a, b in declaration.conditional_dependencies]
+    verticies = [(a.left.value, a.right.value)
+                 for a in declaration.conditional_dependencies]
 
     n = BayesianNetwork(*edges, *verticies)
 
@@ -373,13 +446,14 @@ def main():
 
 def apply_probability(n: BayesianNetwork, probability: Probability):
 
-    match probability.of:
+    match probability.expression:
         case Conditional(Negation(value) | Node(value)):
             vertex = value
         case _:
             raise ValueError(f'Invalid conditional probability: {probability}')
 
-    keys = query_to_event(Query(probability.of)).items()
+    keys = query_to_event_visitor(
+        Query(probability.expression)).items()
 
     n.P[vertex][tuple(k for _, k in sorted(keys))] = probability.value
     n.P[vertex][tuple(k if v != vertex else not k for v,
