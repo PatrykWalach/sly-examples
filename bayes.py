@@ -379,24 +379,6 @@ def get_node_visitor(any_node: AstNode[Node]) -> Node:
             raise TypeError(any_node)
 
 
-class QueryToEventVisitor(Visitor):
-    def __init__(self) -> None:
-        self.event: dict[str, bool] = {}
-        super().__init__()
-
-    def visitNode(self, node: Node):
-        self.event[node.value] = True
-
-    def visitNegation(self, node: Negation):
-        self.event[node.value] = False
-
-
-def query_to_event(query: Query) -> dict[str, bool]:
-    visitor = QueryToEventVisitor()
-    query.accept(visitor)
-    return visitor.event
-
-
 def main():
     with open('bayes.txt') as f:
         text = f.read()
