@@ -306,6 +306,25 @@ def internal(fn: Callable[[AstNode[R]], R]) -> Callable[[AstTree], R]:
     return visit
 
 
+def external(fn: Callable[[AstNode[Callable[[], R]]], R]) -> Callable[[AstTree], R]:
+
+    @wraps(fn)
+    def visit(node: Any):
+        if dc.is_dataclass(node):
+            dataclass_values = (getattr(node, field)
+                                for field in node.__dataclass_fields__)
+            dataclass_values = [partial(visit, node=value)
+                                for value in dataclass_values]
+            return fn(node.__class__(*dataclass_values))
+        match node:
+            case [*arr]:
+                return [partial(visit, node=v) for v in arr]
+            case _:
+                return node
+
+    return visit
+
+
 Event: TypeAlias = dict[str, bool]
 
 
@@ -340,21 +359,21 @@ def query_to_event_visitor(query: AstNode[Event]) -> Event:
             raise TypeError(err)
 
 
-def query_to_event_external_visitor(query: AstTree) -> Event:
+@external
+def query_to_event_external_visitor(query: AstNode[Callable[[], Event]]) -> Event:
     match query:
         case Node(value):
             return {value: True}
         case Negation(node):
-            return {key: not value for key, value in query_to_event_external_visitor(node).items()}
+            return {key: not value for key, value in node().items()}
         case Conditional(left, list() as right):
-            left_and_right = map(
-                query_to_event_external_visitor, [left, *right])
+            left_and_right = [fn() for fn in (left, *right)]
             return functools.reduce(operator.or_, left_and_right)
         case Query([*arr]):
-            arr = map(query_to_event_external_visitor, arr)
+            arr = [fn() for fn in arr]
             return functools.reduce(operator.or_, arr)
         case Query(value) if not isinstance(value, list):
-            return query_to_event_external_visitor(value)
+            return value()
         case node:
             raise TypeError(node)
 
@@ -395,8 +414,6 @@ def main():
             raise ValueError
 
     declaration = remove_negation_visitor(declaration)
-
-
 
     with open('bayes-ast.json', 'w') as f:
         json.dump(declaration, f, cls=AstEncoder, indent=4)
